@@ -35,137 +35,30 @@ git clone https://github.com/FatimaNoor74/VirtuDockDL/.git
 cd VirtuDockDL
 Set up your environment and install dependencies:
 
-sh
-Copy code
-pip install -r requirements.txt
-Run the Flask application:
+## Usage
 
-sh
-Copy code
-python app.py
-Open your web browser and navigate to http://127.0.0.1:5000 to access VirtuDockDL.
+### Running the Application
 
-Uploading Files
-1. Upload CSV File for Ligand Prioritization
+1. **Clone the repository**:
+    ```sh
+    git clone https://github.com/yourusername/VirtuDockDL.git
+    cd VirtuDockDL
+    ```
+
+2. **Set up your environment and install dependencies**
+3. **Run the Flask application**:
+    ```sh
+    python app.py
+    ```
+    Open your web browser and navigate to `http://127.0.0.1:5000` to access VirtuDockDL.
+
+### Uploading Files
+
+#### 1. Upload CSV File for Ligand Prioritization
 Navigate to the Ligand Prioritization tab and upload your CSV file containing data of active and inactive molecules.
-
-html
-Copy code
+```html
 <form method="POST" enctype="multipart/form-data">
     <label for="file">Select a CSV File:</label>
     <input type="file" name="file" id="file" accept=".csv" required>
     <button type="submit">Upload</button>
 </form>
-2. Upload PDB File for Protein Refinement
-Navigate to the Protein Refinement tab and upload your PDB file.
-
-html
-Copy code
-<form method="post" enctype="multipart/form-data">
-    <label for="proteinFile">Select a PDB File:</label>
-    <input type="file" name="file" id="proteinFile" accept=".pdb" required>
-    <button type="submit">Upload</button>
-</form>
-3. Upload ZIP File for Molecular Docking
-Navigate to the Molecular Docking tab and upload your ZIP file containing ligand structures.
-
-html
-Copy code
-<form id="docking-form" method="POST" enctype="multipart/form-data">
-    <label for="protein_file">Select a Protein File (.pdb):</label>
-    <input type="file" name="protein_file" id="protein_file" accept=".pdb" required>
-    <label for="ligand_zip">Select Ligand Zip File (.zip):</label>
-    <input type="file" name="ligand_zip" id="ligand_zip" accept=".zip" required>
-    <button type="submit">Upload and Start Docking</button>
-</form>
-Main Functionalities
-Ligand Prioritization
-python
-Copy code
-from flask import Flask, request, jsonify
-from gnn_model import GNN
-from gnn_utils import mol_to_graph, collate
-import torch
-
-app = Flask(__name__)
-
-@app.route('/predict', methods=['POST'])
-def predict():
-    smiles = request.form['smiles']
-    model = GNN()
-    model.load_state_dict(torch.load('model.pth'))
-    model.eval()
-    
-    mol_data = mol_to_graph(smiles)
-    with torch.no_grad():
-        output = model(mol_data.x, mol_data.edge_index, mol_data.batch)
-        activity = torch.sigmoid(output)
-    
-    return jsonify({'activity': activity.item()})
-
-if __name__ == '__main__':
-    app.run(debug=True)
-Protein Refinement
-python
-Copy code
-from flask import Flask, request, send_file
-from openmm.app import PDBFile, Modeller, ForceField, Simulation
-from openmm import LangevinMiddleIntegrator
-from openmm.unit import kelvin, picosecond
-
-app = Flask(__name__)
-
-@app.route('/refine', methods=['POST'])
-def refine_protein():
-    file = request.files['file']
-    pdb = PDBFile(file)
-    forcefield = ForceField('amber99sb.xml')
-    modeller = Modeller(pdb.topology, pdb.positions)
-    modeller.addHydrogens(forcefield)
-    system = forcefield.createSystem(modeller.topology)
-    integrator = LangevinMiddleIntegrator(300*kelvin, 1/picosecond, 0.004*picosecond)
-    simulation = Simulation(modeller.topology, system, integrator)
-    simulation.context.setPositions(modeller.positions)
-    simulation.minimizeEnergy()
-    
-    refined_file = 'refined_protein.pdb'
-    with open(refined_file, 'w') as f:
-        PDBFile.writeFile(simulation.topology, simulation.context.getState(getPositions=True).getPositions(), f)
-    
-    return send_file(refined_file, as_attachment=True)
-
-if __name__ == '__main__':
-    app.run(debug=True)
-Molecular Docking
-python
-Copy code
-from flask import Flask, request, send_file
-import subprocess
-
-app = Flask(__name__)
-
-@app.route('/dock', methods=['POST'])
-def dock():
-    protein_file = request.files['protein_file']
-    ligand_file = request.files['ligand_file']
-    output_dir = 'docking_results'
-    
-    protein_path = f"{output_dir}/protein.pdb"
-    ligand_path = f"{output_dir}/ligand.pdbqt"
-    protein_file.save(protein_path)
-    ligand_file.save(ligand_path)
-    
-    subprocess.run(['vina', '--receptor', protein_path, '--ligand', ligand_path, '--out', f'{output_dir}/out.pdbqt'])
-    
-    return send_file(f'{output_dir}/out.pdbqt', as_attachment=True)
-
-if __name__ == '__main__':
-    app.run(debug=True)
-Contributing
-We welcome contributions! Please fork the repository and submit pull requests for any enhancements or bug fixes.
-
-License
-This project is licensed under the MIT License. See the LICENSE file for details.
-
-Contact
-For any questions or issues, please open an issue on this repository or contact us at tahirulqamar@gcuf.edu.pk
