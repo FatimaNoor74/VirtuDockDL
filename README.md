@@ -33,5 +33,19 @@ Clone the repository:
 git clone https://github.com/FatimaNoor74/VirtuDockDL/.git
 cd VirtuDockDL
 Set up your environment and install dependencies
+```sh
 
-## Usage
+
+### **Running the Application**
+**Clone the repository:**
+```sh
+git clone https://github.com/yourusername/VirtuDockDL.git
+cd VirtuDockDL
+Set up your environment and install dependencies:
+
+pip install -r requirements.txt
+Run the Flask application:
+
+python app.py
+Open your web browser and navigate to http://127.0.0.1:5000 to access VirtuDockDL.
+
