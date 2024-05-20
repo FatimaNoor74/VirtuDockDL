@@ -113,12 +113,7 @@ def refine_protein():
 ```
 # Molecular Docking
 ```sh
-from flask import Flask, request, send_file
-import subprocess
 
-app = Flask(__name__)
-
-@app.route('/dock', methods=['POST'])
 def dock():
     protein_file = request.files['protein_file']
     ligand_file = request.files['ligand_file']
