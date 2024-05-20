@@ -25,40 +25,13 @@ VirtuDockDL is a comprehensive solution for streamlining the process of drug dis
 pip install flask torch torchvision torchaudio
 pip install pandas numpy scikit-learn matplotlib rdkit biopython dgl
 pip install openmm
-Usage
+
+```sh
+### **Usage**
 Running the Application
 Clone the repository:
-
-sh
-Copy code
 git clone https://github.com/FatimaNoor74/VirtuDockDL/.git
 cd VirtuDockDL
-Set up your environment and install dependencies:
+Set up your environment and install dependencies
 
 ## Usage
-
-### Running the Application
-
-1. **Clone the repository**:
-    ```sh
-    git clone https://github.com/yourusername/VirtuDockDL.git
-    cd VirtuDockDL
-    ```
-
-2. **Set up your environment and install dependencies**
-3. **Run the Flask application**:
-    ```sh
-    python app.py
-    ```
-    Open your web browser and navigate to `http://127.0.0.1:5000` to access VirtuDockDL.
-
-### Uploading Files
-
-#### 1. Upload CSV File for Ligand Prioritization
-Navigate to the Ligand Prioritization tab and upload your CSV file containing data of active and inactive molecules.
-```html
-<form method="POST" enctype="multipart/form-data">
-    <label for="file">Select a CSV File:</label>
-    <input type="file" name="file" id="file" accept=".csv" required>
-    <button type="submit">Upload</button>
-</form>
