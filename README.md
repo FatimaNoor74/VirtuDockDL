@@ -91,6 +91,7 @@ def predict():
     return jsonify({'activity': activity.item()})
 ```
 # Protein Refinement
+```sh
 def refine_protein():
     file = request.files['file']
     pdb = PDBFile(file)
