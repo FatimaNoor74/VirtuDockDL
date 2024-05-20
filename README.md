@@ -132,7 +132,7 @@ def dock():
     
     return send_file(f'{output_dir}/out.pdbqt', as_attachment=True)
 ```
-## Tips for Success
+# Tips for Success
 
 - Ensure your input files are correctly formatted and contain all necessary information.
 - Utilize the "De Novo Molecule Generation" feature to explore new ligands based on specified criteria.
