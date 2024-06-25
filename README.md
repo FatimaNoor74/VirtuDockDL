@@ -138,7 +138,11 @@ def dock():
 We welcome contributions! Please fork the repository and submit pull requests for any enhancements or bug fixes.
 
 # Contact
-For any questions or issues, please open an issue on this repository or contact us at tahirulqamar@gcuf.edu.pk.
+If you have any inquiries or encounter any issues, we encourage you to contribute to this project by opening an issue in our GitHub repository. For direct assistance or detailed inquiries, please feel free to reach out to our team:
+- Dr. Muhammad Tahir ul Qamar: [tahirulqamar@gcuf.edu.pk](mailto:tahirulqamar@gcuf.edu.pk)
+- Ms. Fatima Noor: [fatima.noor@imbb.uol.edu.pk](mailto:fatima.noor@imbb.uol.edu.pk)
+
+We are dedicated to supporting our community and enhancing the project with your valuable feedback.
 
 
 
