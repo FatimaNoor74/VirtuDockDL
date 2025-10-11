@@ -72,17 +72,34 @@ from io import BytesIO
 from flask import Flask, send_from_directory, url_for, current_app, flash, redirect, render_template
 from datetime import datetime
 
-#Teste de link
-from pyngrok import conf, ngrok
-
-#Adicionar seu token
-conf.get_default().auth_token = "33hIpXxhdjf5sVXivIwoZAqBoXW_2nwsk1GjCU7FBEipumxuN"
-
 os.makedirs("static", exist_ok=True)
 
-# Cria um túnel para a porta 5000
-public_url = ngrok.connect(5000)
-print("URL pública:", public_url)
+import subprocess
+import threading
+import time
+import re
+
+public_url = None
+
+def start_cloudflared():
+    global public_url
+    process = subprocess.Popen(
+        ["cloudflared", "tunnel", "--url", "http://localhost:5000", "--logfile", "cloudflared.log", "--loglevel", "info"],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True
+    )
+    time.sleep(4)
+    with open("cloudflared.log") as f:
+        logs = f.read()
+        match = re.search(r"https://[-0-9a-zA-Z]+\.trycloudflare\.com", logs)
+        if match:
+            public_url = match.group(0)
+
+threading.Thread(target=start_cloudflared, daemon=True).start()
+time.sleep(5)
+print("✅ URL pública Cloudflare Tunnel:", public_url)
+
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'your_secret_key'
@@ -1005,7 +1022,8 @@ if __name__ == "__main__":
         os.makedirs(app.config['UPLOAD_FOLDER'])
     if not os.path.exists(app.config['DOCKING_RESULTS_DIR']):
         os.makedirs(app.config['DOCKING_RESULTS_DIR'])
-    app.run(port=5000, use_reloader=False)
+app.run(host="0.0.0.0", port=5000)
+
 
 
 
