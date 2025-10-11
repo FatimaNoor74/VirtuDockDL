@@ -78,30 +78,42 @@ import subprocess
 import threading
 import time
 import re
+import os
+from flask_cors import CORS
 
 public_url = None
 
+app = Flask(__name__)
+CORS(app)
+
 def start_cloudflared():
     global public_url
-    process = subprocess.Popen(
-        ["cloudflared", "tunnel", "--url", "http://localhost:5000", "--logfile", "cloudflared.log", "--loglevel", "info"],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True
-    )
-    time.sleep(4)
+    # Garante que não tem túnel antigo
+    os.system("pkill cloudflared || echo Tunnel limpo!")
+
+    command = [
+        "cloudflared", "tunnel",
+        "--url", "http://localhost:5000",
+        "--logfile", "cloudflared.log",
+        "--metrics", "localhost:45678"
+    ]
+
+    process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+    time.sleep(5)
     with open("cloudflared.log") as f:
         logs = f.read()
-        match = re.search(r"https://[-0-9a-zA-Z]+\.trycloudflare\.com", logs)
+        match = re.search(r"https://[-0-9A-Za-z]+\.trycloudflare\.com", logs)
         if match:
             public_url = match.group(0)
+            print(f"\n✅ Túnel Cloudflare ativo: {public_url}\n")
+        else:
+            print("\n❌ Não consegui capturar a URL do túnel. Execute novamente a célula.\n")
 
 threading.Thread(target=start_cloudflared, daemon=True).start()
-time.sleep(5)
-print("✅ URL pública Cloudflare Tunnel:", public_url)
+time.sleep(8)
 
 
-app = Flask(__name__)
 app.config['SECRET_KEY'] = 'your_secret_key'
 app.config['UPLOADED_FILES_DIR'] = 'uploaded_files'
 app.config['GENERATED_FILES_DIR'] = 'generated_files'
@@ -834,13 +846,24 @@ def upload_files():
     else:
         return jsonify({'error': 'Invalid file type or missing files.'}), 400
 
-@app.route('/start_docking', methods=['POST'])
-def start_docking():
-    try:
-        data = request.get_json()
-        job_id = data.get('job_id')
+# ======= Início: suporte a fila de docking (cole no app.py) =======
+import queue
+import threading
+import time
+import json
 
-        # Parâmetros de docking
+# fila e status global (em memória)
+docking_queue = queue.Queue()
+job_status = {}          # job_id -> {"status": "pending|running|done|error", "message": "..."}
+job_status_lock = threading.Lock()
+
+def safe_mkdir(path):
+    os.makedirs(path, exist_ok=True)
+
+def run_vina_for_job(job_id, data):
+    """Executa o processo de docking para um job_id (rodado pela worker thread)."""
+    try:
+        # Parâmetros vindos do data
         center_x = data.get('center_x')
         center_y = data.get('center_y')
         center_z = data.get('center_z')
@@ -851,19 +874,28 @@ def start_docking():
         num_modes = data.get('num_modes')
         energy_range = data.get('energy_range')
 
-        # Caminhos
         job_workspace = os.path.join(app.config['UPLOAD_FOLDER'], job_id)
         job_results_dir = os.path.join(app.config['DOCKING_RESULTS_DIR'], job_id)
         output_directory_path = os.path.join(job_workspace, 'refined_ligands')
-        protein_file_path = next(Path(job_workspace).glob('*.pdb'))
+
+        # Garante diretórios
+        safe_mkdir(job_workspace)
+        safe_mkdir(job_results_dir)
+
+        # Acha o protein .pdb (pode lançar se não houver)
+        protein_pdbs = list(Path(job_workspace).glob('*.pdb'))
+        if not protein_pdbs:
+            raise RuntimeError("Arquivo PDB do receptor não encontrado no workspace do job.")
+        protein_file_path = protein_pdbs[0]
         protein_pdbqt_path = protein_file_path.with_suffix('.pdbqt')
 
-        print("Starting the docking process...")
         docking_data = []
 
+        # Iterate ligands (cada ligand -> cria config, roda vina, salva log)
         for ligand_file in Path(output_directory_path).glob('*.pdbqt'):
             ligand_pdbqt = str(ligand_file)
             result_file_path = os.path.join(job_results_dir, ligand_file.stem + '_docked.pdbqt')
+            config_file_path = os.path.join(job_results_dir, ligand_file.stem + '_config.txt')
 
             config_text = f"""receptor = {protein_pdbqt_path}
 ligand = {ligand_pdbqt}
@@ -880,54 +912,141 @@ exhaustiveness = {exhaustiveness}
 num_modes = {num_modes}
 energy_range = {energy_range}
 """
+            # escreve config
+            with open(config_file_path, 'w') as cfg:
+                cfg.write(config_text)
 
-            config_file_path = os.path.join(job_results_dir, ligand_file.stem + '_config.txt')
-            with open(config_file_path, 'w') as config_file:
-                config_file.write(config_text)
+            # log file por ligand
+            vina_log_path = os.path.join(job_results_dir, f"{ligand_file.stem}_vina.log")
 
             vina_command = ['vina', '--config', config_file_path]
             try:
-                result = subprocess.run(vina_command, capture_output=True, text=True)
-                if result.returncode != 0:
-                    print(f"Error in docking: {result.stderr}")
+                # aqui rodamos o Vina e salvamos stdout/stderr em log
+                proc = subprocess.run(vina_command, capture_output=True, text=True, timeout=3600)  # timeout por segurança
+                with open(vina_log_path, 'w') as lf:
+                    lf.write("=== STDOUT ===\n")
+                    lf.write(proc.stdout or "")
+                    lf.write("\n=== STDERR ===\n")
+                    lf.write(proc.stderr or "")
+                if proc.returncode != 0:
+                    print(f"[{job_id}] Vina returned non-zero for {ligand_file.stem}: {proc.stderr}")
                 else:
-                    print(f"Docking completed for {ligand_file.stem}. Output:\n{result.stdout}")
+                    print(f"[{job_id}] Vina done for {ligand_file.stem}")
+            except subprocess.TimeoutExpired as te:
+                with open(vina_log_path, 'w') as lf:
+                    lf.write(f"TIMEOUT after {te.timeout} seconds\n")
+                print(f"[{job_id}] Timeout running Vina for {ligand_file.stem}")
             except Exception as e:
-                print(f"An exception occurred: {e}")
+                with open(vina_log_path, 'w') as lf:
+                    lf.write(f"EXCEPTION: {str(e)}\n")
+                print(f"[{job_id}] Exception running Vina for {ligand_file.stem}: {e}")
             finally:
-                os.remove(config_file_path)
+                # Remove config (seguro)
+                try:
+                    os.remove(config_file_path)
+                except Exception:
+                    pass
 
-        # Coletar dados de todos os arquivos docked
+        # Depois de rodar todos os ligands, coletar REMARK lines
         for file_name in Path(job_results_dir).glob('*_docked.pdbqt'):
-            with open(file_name, 'r') as file:
-                for line in file:
+            with open(file_name, 'r') as f:
+                for line in f:
                     if line.startswith("REMARK VINA RESULT:"):
                         parts = line.split()
-                        docking_data.append({
-                            'file_name': os.path.basename(file_name),
-                            'binding_affinity': float(parts[3]),
-                            'rmsd_lb': float(parts[4]),
-                            'rmsd_ub': float(parts[5])
-                        })
+                        # Protege contra parsing inválido
+                        try:
+                            docking_data.append({
+                                'file_name': os.path.basename(file_name),
+                                'binding_affinity': float(parts[3]),
+                                'rmsd_lb': float(parts[4]),
+                                'rmsd_ub': float(parts[5])
+                            })
+                        except Exception:
+                            continue
 
         if docking_data:
             df = pd.DataFrame(docking_data)
+            # mantemos a lógica anterior (pegar segunda pose, etc)
             df_second_poses = df.groupby('file_name').nth(1).reset_index()
             df_second_poses['final_rmsd'] = df_second_poses['rmsd_ub'] - df_second_poses['rmsd_lb']
             df_best_poses = df_second_poses
-
             csv_file_path = os.path.join(job_results_dir, 'docking_results.csv')
             df_best_poses.to_csv(csv_file_path, index=False)
-            print(df_best_poses)
         else:
-            print("No docking data to process.")
+            # salva um CSV vazio para indicar que não houve resultados
+            csv_file_path = os.path.join(job_results_dir, 'docking_results.csv')
+            pd.DataFrame([]).to_csv(csv_file_path, index=False)
 
-        # ✅ Agora o return está fora do loop
-        return jsonify({'message': f'Docking completed for job {job_id}'})
+        # finaliza job com sucesso
+        with job_status_lock:
+            job_status[job_id]['status'] = 'done'
+            job_status[job_id]['message'] = 'Docking completed successfully.'
+        print(f"[{job_id}] completed.")
+
     except Exception as e:
-        print(f"Erro no backend: {str(e)}")
+        print(f"[{job_id}] Exception in run_vina_for_job: {e}")
+        with job_status_lock:
+            # marca erro e armazena mensagem
+            job_status[job_id]['status'] = 'error'
+            job_status[job_id]['message'] = str(e)
+
+def docking_worker():
+    """Worker que processa a fila em série (um job por vez)."""
+    while True:
+        job_id, data = docking_queue.get()
+        with job_status_lock:
+            job_status[job_id]['status'] = 'running'
+            job_status[job_id]['message'] = 'Running docking...'
+        try:
+            run_vina_for_job(job_id, data)
+        finally:
+            docking_queue.task_done()
+        # breve sono para evitar loop apertado
+        time.sleep(0.2)
+
+# inicializa worker em background (daemon)
+worker_thread = threading.Thread(target=docking_worker, daemon=True)
+worker_thread.start()
+
+# Endpoint que enfileira o job (substitui o start_docking anterior)
+@app.route('/start_docking', methods=['POST'])
+def start_docking():
+    try:
+        data = request.get_json(force=True)
+        if not data:
+            return jsonify({"error": "Nenhum dado recebido"}), 400
+        job_id = data.get('job_id')
+        if not job_id:
+            return jsonify({"error": "job_id não informado"}), 400
+
+        # Cria pastas do job (se ainda não existirem)
+        job_workspace = os.path.join(app.config['UPLOAD_FOLDER'], job_id)
+        job_results_dir = os.path.join(app.config['DOCKING_RESULTS_DIR'], job_id)
+        safe_mkdir(job_workspace)
+        safe_mkdir(job_results_dir)
+
+        # inicializa status do job
+        with job_status_lock:
+            job_status[job_id] = {'status': 'pending', 'message': 'Job enfileirado.'}
+
+        # coloca na fila (data pode conter params de docking)
+        docking_queue.put((job_id, data))
+
+        return jsonify({'message': 'Job enfileirado', 'job_id': job_id}), 202
+
+    except Exception as e:
+        print(f"Erro no backend (start_docking): {str(e)}")
         return jsonify({'error': str(e)}), 500
 
+# Endpoint para consultar status de job
+@app.route('/job_status/<job_id>', methods=['GET'])
+def job_status_endpoint(job_id):
+    with job_status_lock:
+        info = job_status.get(job_id)
+        if not info:
+            return jsonify({'status': 'unknown', 'message': 'job_id não encontrado'}), 404
+        return jsonify(info), 200
+# ======= Fim: suporte a fila de docking =======
 
 def validate_docking_output(docked_file_path):
     if os.path.exists(docked_file_path) and os.path.getsize(docked_file_path) > 0:
@@ -1023,6 +1142,7 @@ if __name__ == "__main__":
     if not os.path.exists(app.config['DOCKING_RESULTS_DIR']):
         os.makedirs(app.config['DOCKING_RESULTS_DIR'])
 app.run(host="0.0.0.0", port=5000)
+
 
 
 
