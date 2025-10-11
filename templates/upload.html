@@ -778,6 +778,8 @@ $('#docking-form').on('submit', function(e) {
             })
             .then(res => res.json())
             .then(data => {
+                $('#results-info').text("✅ Job enfileirado! Docking será iniciado...");
+                checkJobStatus(job_id);
                 $('#results-info').text(data.message);
                 fetchAndDisplayResults(job_id); // opcional: iniciar análise
             })
@@ -823,6 +825,23 @@ function fetchAndDisplayResults(job_id) {
     });
 }
 
+function checkJobStatus(job_id) {
+  fetch('/job_status/' + job_id)
+    .then(res => res.json())
+    .then(data => {
+      $('#results-info').text("Status: " + data.status + " | " + data.message);
+
+      if (data.status === "pending" || data.status === "running") {
+        setTimeout(() => checkJobStatus(job_id), 2000); // checa a cada 2s
+      } else if (data.status === "done") {
+        $('#results-info').text("✅ Docking finalizado! Baixando resultados...");
+        fetchAndDisplayResults(job_id); // sua função existente
+      } else {
+        $('#results-info').text("❌ Erro no docking: " + data.message);
+      }
+    });
+}
+  
 function fetchAndCreateChart(job_id) {
     fetch(`/chart_data/${job_id}`) // Use template literal to insert job_id
     .then(response => response.json())
@@ -839,9 +858,12 @@ function fetchAndCreateChart(job_id) {
         console.error('Error fetching chart data:', error);
     });
 }
+
 </script>
 </body>
 </html>
+
+
 
 
 
