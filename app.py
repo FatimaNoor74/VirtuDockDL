@@ -841,9 +841,10 @@ def upload_files():
         convert_sdf_to_pdbqt(sdf_path=ligand_zip_path, output_directory=output_directory_path)
         protein_pdbqt_path = protein_file_path.replace('.pdb', '.pdbqt')
         convert_protein(protein_file_path, protein_pdbqt_path)
-
-        return jsonify({'job_id': job_id, 'message': 'Files uploaded, conversion started, and docking initiated!'})
+        
+        return jsonify({'job_id': job_id, 'message': 'Files uploaded, conversion started, and docking initiated!'}), 202
     else:
+        print('Erro durante a conversão')
         return jsonify({'error': 'Invalid file type or missing files.'}), 400
 
 # ======= Início: suporte a fila de docking (cole no app.py) =======
@@ -1081,7 +1082,6 @@ def analyze_results(job_id):
     else:
         return jsonify({'message': 'Results not ready'}), 202
 
-
 @app.route('/chart_data/<job_id>')  # URL pattern includes job_id
 def chart_data(job_id):
     # Construct the file path using the job_id provided in the URL
@@ -1142,6 +1142,22 @@ if __name__ == "__main__":
     if not os.path.exists(app.config['DOCKING_RESULTS_DIR']):
         os.makedirs(app.config['DOCKING_RESULTS_DIR'])
 app.run(host="0.0.0.0", port=5000)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
