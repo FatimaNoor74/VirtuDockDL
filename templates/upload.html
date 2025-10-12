@@ -610,96 +610,38 @@ p, ul {
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
 
     <!--JavaScript -->
-    <script>
+<script>
 
-// Function to create chart from CSV data
-function createChartFromCSVData(chartData) {
+// ===================== CRIA GRÁFICO =====================
+function createChartFromCSVData(chartData, job_id) {
     new Chart(document.getElementById('resultsChart').getContext('2d'), {
-        type: 'bar', // or 'line', 'doughnut', etc.
+        type: 'bar',
         data: chartData,
         options: {
             scales: {
-                y: {
-                    beginAtZero: true
-                }
+                y: { beginAtZero: true }
             }
         }
     });
-}
-        // Define the polling, CSV parsing, and results display functions
-        function pollResults() {
-            setTimeout(function() {
-                $.ajax({
-                    url: '/analyze_results',
-                    type: 'GET',
-                    success: function(data) {
-                        if (data && data.length > 0) {
-                            displayResults(data);
-                        } else {
-                            pollResults();
-                        }
-                    },
-                    error: function() {
-                        $('#results-info').text('Error fetching results.');
-                    }
-                });
-            }, 5000);  // Poll every 5 seconds
-        }
 
-        function displayResults(results) {
-            $('#results-info').text('Results ready. Downloading...');
-            window.location.href = '/analyze_results';  // Trigger the file download
-        }
+    // Mostrar botão de download
+    $('#downloadAllComplexesButton')
+        .attr('href', `/download_complexes/${job_id}`)
+        .show();
 
-function fetchAndDisplayResults(job_id) {
-    // Fetch results using the job_id
-    fetch(`/analyze_results/${job_id}`) // This endpoint should return CSV or some data to indicate readiness
-    .then(response => {
-        if (!response.ok) {
-            throw new Error('Results not ready');
-        }
-        return response.text();
-    })
-    .then(csvText => {
-        // Parse CSV using PapaParse
-        Papa.parse(csvText, {
-            header: true,
-            skipEmptyLines: true,
-            complete: function(results) {
-                if (results.data && results.data.length > 0) {
-                    // Call function to display table with parsed data
-                    displayResultsAsTable(results.data);
-                    // Call function to fetch and create chart
-                    fetchAndCreateChart(job_id);
-                } else {
-                    // If results.data is empty, keep polling
-                    $('#results-info').text('No results yet. Please wait...');
-                    setTimeout(() => fetchAndDisplayResults(job_id), 5000); 
-                }
-            }
-        });
-    })
-    .catch(error => {
-        // Handle errors here
-        console.error('Fetch and parse error:', error);
-        $('#results-info').text(error.toString());
-        setTimeout(() => fetchAndDisplayResults(job_id), 5000); // Retry after delay
-    });
+    // Mostrar seção de resultados e gráfico
+    $('#docking-results-section').show();
+    $('#chart-container').show();
 }
 
+// ===================== EXIBE RESULTADOS EM TABELA =====================
 function displayResultsAsTable(dataArray) {
-
-    console.log("Displaying table with data:", dataArray);  // Diagnostic log
     const resultsDiv = document.getElementById('docking-results-table');
-    if (!resultsDiv) {
-        console.error('Docking results div not found.'); // Diagnostic error
-        return;
-    }
-    resultsDiv.innerHTML
-    
-    // Construct the table with the new data
+    resultsDiv.innerHTML = ""; // Limpa conteúdo anterior
+
     const table = document.createElement('table');
     table.className = 'table table-bordered table-hover';
+
     const thead = document.createElement('thead');
     const headerRow = document.createElement('tr');
     Object.keys(dataArray[0]).forEach(header => {
@@ -709,7 +651,7 @@ function displayResultsAsTable(dataArray) {
     });
     thead.appendChild(headerRow);
     table.appendChild(thead);
-    
+
     const tbody = document.createElement('tbody');
     dataArray.forEach(row => {
         const tr = document.createElement('tr');
@@ -721,34 +663,67 @@ function displayResultsAsTable(dataArray) {
         tbody.appendChild(tr);
     });
     table.appendChild(tbody);
-    
-    // Append the table to the DOM
+
     resultsDiv.appendChild(table);
 }
 
-function fetchAndCreateChart(job_id) {
-    // Fetch chart data using job_id
-    fetch(`/chart_data/${job_id}`) // Use template literal to insert job_id
-    .then(response => response.json())
-    .then(chartData => {
-        if (!chartData || chartData.message) {
-            // If the message key exists, it means data is not ready
-            throw new Error(chartData.message || "No chart data available.");
-        }
-        createChartFromCSVData(chartData); // Function to create the chart
-    })
-    .catch(error => {
-        console.error('Error fetching chart data:', error);
-        $('#results-info').text(error.toString());
-        setTimeout(() => fetchAndCreateChart(job_id), 5000); // Retry after delay
-    });
+// ===================== BUSCA RESULTADOS =====================
+function fetchAndDisplayResults(job_id) {
+    fetch(`/analyze_results/${job_id}`)
+        .then(response => response.text())
+        .then(text => {
+            Papa.parse(text, {
+                header: true,
+                skipEmptyLines: true,
+                complete: function(results) {
+                    if (results.data.length > 0) {
+                        displayResultsAsTable(results.data);
+                        fetchAndCreateChart(job_id);
+                    } else {
+                        $('#results-info').text('Aguardando resultados...');
+                        setTimeout(() => fetchAndDisplayResults(job_id), 5000);
+                    }
+                }
+            });
+        })
+        .catch(() => {
+            $('#results-info').text('Aguardando resultados...');
+            setTimeout(() => fetchAndDisplayResults(job_id), 5000);
+        });
 }
 
+// ===================== BUSCA DADOS DO GRÁFICO =====================
+function fetchAndCreateChart(job_id) {
+    fetch(`/chart_data/${job_id}`)
+        .then(res => res.json())
+        .then(chartData => {
+            createChartFromCSVData(chartData, job_id);
+        })
+        .catch(() => setTimeout(() => fetchAndCreateChart(job_id), 5000));
+}
+
+// ===================== CHECA STATUS DO JOB =====================
+function checkJobStatus(job_id) {
+    fetch(`/job_status/${job_id}`)
+        .then(res => res.json())
+        .then(data => {
+            $('#results-info').text(`Status: ${data.status} | ${data.message}`);
+            if (data.status === "done") {
+                fetchAndDisplayResults(job_id);
+            } else if (data.status === "error") {
+                $('#results-info').text(`❌ Erro: ${data.message}`);
+            } else {
+                setTimeout(() => checkJobStatus(job_id), 2000);
+            }
+        });
+}
+
+// ===================== ENVIA FORMULÁRIO =====================
 $('#docking-form').on('submit', function(e) {
     e.preventDefault();
 
     var formData = new FormData(this);
-    $('#results-info').text('Uploading files...');
+    $('#results-info').text('📤 Enviando arquivos...');
 
     $.ajax({
         type: 'POST',
@@ -758,11 +733,11 @@ $('#docking-form').on('submit', function(e) {
         processData: false,
         success: function(response) {
             const job_id = response.job_id;
-            $('#results-info').text("Job '" + job_id + "' uploaded! Starting docking...");
+            $('#results-info').text(`✅ Upload concluído! Job ID: ${job_id}`);
 
-            // Parâmetros de docking (você pode capturar do formulário também)
+            // Parâmetros de docking
             const dockingParams = {
-                job_id: job_id,
+                job_id,
                 center_x: parseFloat($('#center_x').val()),
                 center_y: parseFloat($('#center_y').val()),
                 center_z: parseFloat($('#center_z').val()),
@@ -774,100 +749,27 @@ $('#docking-form').on('submit', function(e) {
                 energy_range: parseInt($('#energy_range').val())
             };
 
-            // Chamada para iniciar o docking
             fetch('/start_docking', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(dockingParams)
             })
             .then(res => res.json())
-            .then(data => {
-                $('#results-info').text("✅ Job enfileirado! Docking será iniciado...");
+            .then(() => {
+                $('#results-info').text('⚙️ Docking iniciado...');
                 checkJobStatus(job_id);
-                $('#results-info').text(data.message);
-                fetchAndDisplayResults(job_id); // opcional: iniciar análise
             })
-            .catch(err => {
-                $('#results-info').text('Erro ao iniciar docking.');
-                console.error(err);
-            });
+            .catch(() => $('#results-info').text('❌ Erro ao iniciar docking.'));
         },
         error: function() {
-            $('#results-info').text('Erro ao enviar arquivos.');
+            $('#results-info').text('❌ Erro ao enviar arquivos.');
         }
     });
 });
-
-
-function fetchAndDisplayResults(job_id) {
-    // Fetch results using the job_id
-    fetch(`/analyze_results/${job_id}`) // This endpoint should return CSV or some data to indicate readiness
-    .then(response => response.text())
-    .then(text => {
-        // ... handle the response text and display results ...
-        fetchAndCreateChart(job_id); // Call fetchAndCreateChart here after you have processed text
-    })
-    .catch(error => {
-        console.error('Error:', error);
-        $('#results-info').text('No results yet. Please wait...');
-        setTimeout(() => fetchAndDisplayResults(job_id), 5000); // Polling if error occurs
-    });
-}
-
-function fetchAndDisplayResults(job_id) {
-    // Fetch results using the job_id
-    fetch(`/analyze_results/${job_id}`) // This endpoint should return CSV or some data to indicate readiness
-    .then(response => response.text())
-    .then(text => {
-        // ... handle the response text and display results ...
-        fetchAndCreateChart(job_id); // Call fetchAndCreateChart here after you have processed text
-    })
-    .catch(error => {
-        console.error('Error:', error);
-        $('#results-info').text('No results yet. Please wait...');
-        setTimeout(() => fetchAndDisplayResults(job_id), 5000); // Polling if error occurs
-    });
-}
-
-function checkJobStatus(job_id) {
-  fetch('/job_status/' + job_id)
-    .then(res => res.json())
-    .then(data => {
-      $('#results-info').text("Status: " + data.status + " | " + data.message);
-
-      if (data.status === "pending" || data.status === "running") {
-        setTimeout(() => checkJobStatus(job_id), 2000); // checa a cada 2s
-      } else if (data.status === "done") {
-        $('#results-info').text("✅ Docking finalizado! Baixando resultados...");
-        fetchAndDisplayResults(job_id); // sua função existente
-      } else {
-        $('#results-info').text("❌ Erro no docking: " + data.message);
-      }
-    });
-}
-  
-function fetchAndCreateChart(job_id) {
-    fetch(`/chart_data/${job_id}`) // Use template literal to insert job_id
-    .then(response => response.json())
-    .then(chartData => {
-        if (chartData.message) {
-            // If the message key exists, it means data is not ready
-            console.log(chartData.message); // Log the message
-            setTimeout(() => fetchAndCreateChart(job_id), 5000); // Polling if not ready
-        } else {
-            createChartFromCSVData(chartData); // This function creates the chart
-        }
-    })
-    .catch(error => {
-        console.error('Error fetching chart data:', error);
-    });
-}
-
 </script>
 </body>
 </html>
+
 
 
 
