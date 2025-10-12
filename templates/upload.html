@@ -473,92 +473,98 @@ p, ul {
 
 </div>
 
-            <!-- End of Protein Refinement Tab Pane -->
+    <!-- End of Protein Refinement Tab Pane -->
+
     <!-- Molecular Docking Section -->
 <div class="tab-pane fade" id="pills-molecular-docking" role="tabpanel" aria-labelledby="pills-molecular-docking-tab">
-    
+
+    <!-- Upload & Parameters -->
     <div class="form-section">
         <h2 class="mb-3">Upload Files for Docking</h2>
         <form id="docking-form" method="POST" enctype="multipart/form-data">
+
             <div class="form-group">
                 <label for="protein_file">Select a Protein File (.pdb):</label>
                 <input type="file" name="protein_file" id="protein_file" accept=".pdb" class="form-control-file" required>
             </div>
+
             <div class="form-group">
                 <label for="ligand_zip">Select Ligand Zip File (.zip):</label>
                 <input type="file" name="ligand_zip" id="ligand_zip" accept=".zip" class="form-control-file" required>
             </div>
-            
+
             <h4 class="mt-4 mb-3">Docking Parameters</h4>
-            
+
             <div class="row">
                 <div class="col-md-4">
-                    <div class="form-group">
-                        <label for="center_x">Center X:</label>
-                        <input type="number" name="center_x" id="center_x" class="form-control" placeholder="0" step="any" required>
-                    </div>
+                    <label for="center_x">Center X:</label>
+                    <input type="number" name="center_x" id="center_x" class="form-control" placeholder="0" step="any" required>
                 </div>
                 <div class="col-md-4">
-                    <div class="form-group">
-                        <label for="center_y">Center Y:</label>
-                        <input type="number" name="center_y" id="center_y" class="form-control" placeholder="0" step="any" required>
-                    </div>
+                    <label for="center_y">Center Y:</label>
+                    <input type="number" name="center_y" id="center_y" class="form-control" placeholder="0" step="any" required>
                 </div>
                 <div class="col-md-4">
-                    <div class="form-group">
-                        <label for="center_z">Center Z:</label>
-                        <input type="number" name="center_z" id="center_z" class="form-control" placeholder="0" step="any" required>
-                    </div>
+                    <label for="center_z">Center Z:</label>
+                    <input type="number" name="center_z" id="center_z" class="form-control" placeholder="0" step="any" required>
                 </div>
             </div>
-            
-            <div class="row">
+
+            <div class="row mt-3">
                 <div class="col-md-4">
-                    <div class="form-group">
-                        <label for="size_x">Size X:</label>
-                        <input type="number" name="size_x" id="size_x" class="form-control" placeholder="20" step="any" required>
-                    </div>
+                    <label for="size_x">Size X:</label>
+                    <input type="number" name="size_x" id="size_x" class="form-control" placeholder="20" step="any" required>
                 </div>
                 <div class="col-md-4">
-                    <div class="form-group">
-                        <label for="size_y">Size Y:</label>
-                        <input type="number" name="size_y" id="size_y" class="form-control" placeholder="20" step="any" required>
-                    </div>
+                    <label for="size_y">Size Y:</label>
+                    <input type="number" name="size_y" id="size_y" class="form-control" placeholder="20" step="any" required>
                 </div>
                 <div class="col-md-4">
-                    <div class="form-group">
-                        <label for="size_z">Size Z:</label>
-                        <input type="number" name="size_z" id="size_z" class="form-control" placeholder="20" step="any" required>
-                    </div>
+                    <label for="size_z">Size Z:</label>
+                    <input type="number" name="size_z" id="size_z" class="form-control" placeholder="20" step="any" required>
                 </div>
             </div>
-            
-            <div class="form-group">
+
+            <div class="form-group mt-3">
                 <label for="exhaustiveness">Exhaustiveness:</label>
                 <input type="number" name="exhaustiveness" id="exhaustiveness" class="form-control" placeholder="8" required>
             </div>
+
             <div class="form-group">
                 <label for="num_modes">Number of Modes:</label>
                 <input type="number" name="num_modes" id="num_modes" class="form-control" placeholder="9" required>
             </div>
+
             <div class="form-group">
                 <label for="energy_range">Energy Range:</label>
                 <input type="number" name="energy_range" id="energy_range" class="form-control" placeholder="3" required>
             </div>
-            
-            <button type="submit" class="btn btn-primary">Upload and Start Docking</button>
+
+            <!-- ✅ Botão deve ficar dentro do <form> -->
+            <button type="submit" class="btn btn-primary mt-3">Upload and Start Docking</button>
+
         </form>
     </div>
+    <!-- Docking Updating Section -->
 
-    <hr> <div class="form-section">
-        <h2 class="mb-3">Docking Results</h2>
+    <div class="form-section">
+    <h2 class="mb-3">Docking Results</h2>
         <p id="results-info">No results yet. Please upload files and start docking.</p>
-        
+    </div>
+
+    <!-- Docking Results Section -->
+
+    <hr>
+    <div class="form-section" id="docking-results-section" style="display:none;">
         <div id="docking-results-table"></div>
-        
-        <a href="#" id="downloadAllComplexesButton" class="btn btn-success mt-3 mb-3" style="display: none;">Download All Complexes and Results in Tabular Form</a>
-        
-        <div id="chart-container" style="display:block;">
+
+      <div class="d-flex justify-content-center">
+        <a href="#" id="downloadAllComplexesButton" class="btn btn-success mt-3 mb-3" style="display:none;">
+            Download All Complexes and Results in Tabular Form
+        </a>
+      </div>
+
+        <div id="chart-container" style="display:none;">
             <h3 class="mb-3">Docking Chart</h3>
             <canvas id="resultsChart"></canvas>
         </div>
@@ -862,6 +868,7 @@ function fetchAndCreateChart(job_id) {
 </script>
 </body>
 </html>
+
 
 
 
