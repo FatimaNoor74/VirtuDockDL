@@ -642,45 +642,20 @@ function createChartFromCSVData(chartData, job_id) {
 
 // ===================== BUSCA RESULTADOS =====================
 function fetchAndDisplayResults(job_id) {
-    fetch(`/analyze_results/${job_id}`, { cache: "no-store" })
-        .then(response => {
-            if (response.status === 202) {
-                console.log("Waiting for results...");
-                setTimeout(() => fetchAndDisplayResults(job_id), 5000);
-                return null;
-            }
-            if (!response.ok) {
-                throw new Error('Error fetching results');
-            }
-            return response.text();
-        })
-        .then(text => {
-            if (!text) return;
-
-            Papa.parse(text, {
-                header: true,
-                skipEmptyLines: true,
-                complete: function(results) {
-                    if (results.data && results.data.length > 0) {
-                        console.log("Results received!");
-                        // Desliga a mensagem de espera
-                        $('#results-info').text('');
-                        // Mostra tabela
-                        displayResultsAsTable(results.data);
-                        // Mostra gráfico
-                        fetchAndCreateChart(job_id);
-                    } else {
-                        console.log("Empty results, retrying...");
-                        setTimeout(() => fetchAndDisplayResults(job_id), 5000);
-                    }
-                }
-            });
-        })
-        .catch(err => {
-            console.error(err);
-            setTimeout(() => fetchAndDisplayResults(job_id), 5000);
-        });
+    // Fetch results using the job_id
+    fetch(`/analyze_results/${job_id}`) // This endpoint should return CSV or some data to indicate readiness
+    .then(response => response.text())
+    .then(text => {
+        // ... handle the response text and display results ...
+        fetchAndCreateChart(job_id); // Call fetchAndCreateChart here after you have processed text
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        $('#results-info').text('No results yet. Please wait...');
+        setTimeout(() => fetchAndDisplayResults(job_id), 5000); // Polling if error occurs
+    });
 }
+
 
 // ===================== BUSCA DADOS DO GRÁFICO =====================
 function fetchAndCreateChart(job_id) {
@@ -773,40 +748,3 @@ $('#docking-form').on('submit', function(e) {
 {% endraw %}
 </body>
 </html>
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
