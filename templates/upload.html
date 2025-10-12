@@ -609,7 +609,7 @@ p, ul {
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
 
-    <!--JavaScript -->
+{% raw %}
 <script>
 
 // ===================== CRIA GRÁFICO =====================
@@ -731,11 +731,16 @@ $('#docking-form').on('submit', function(e) {
         data: formData,
         contentType: false,
         processData: false,
-        success: function(response) {
-            const job_id = response.job_id;
-            $('#results-info').text(`✅ Upload concluído! Job ID: ${job_id}`);
+        timeout: 0, // Necessário para uploads grandes
+        beforeSend: function () {
+            $('#results-info').text('📤 Iniciando conversão dos arquivos...');
+        },
 
-            // Parâmetros de docking
+        success: function (response) {
+            const job_id = response.job_id;
+            $('#results-info').text(`✅ Conversão concluída! Job ID: ${job_id}. Iniciando docking...`);
+
+            // Parâmetros do docking
             const dockingParams = {
                 job_id,
                 center_x: parseFloat($('#center_x').val()),
@@ -749,26 +754,37 @@ $('#docking-form').on('submit', function(e) {
                 energy_range: parseInt($('#energy_range').val())
             };
 
+            // Envia os parâmetros de docking
             fetch('/start_docking', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(dockingParams)
             })
             .then(res => res.json())
-            .then(() => {
-                $('#results-info').text('⚙️ Docking iniciado...');
-                checkJobStatus(job_id);
+            .then(data => {
+                $('#results-info').text('⚙️ Docking iniciado! Acompanhe abaixo...');
+                checkJobStatus(job_id); // 🔁 começa a acompanhar o status
             })
-            .catch(() => $('#results-info').text('❌ Erro ao iniciar docking.'));
+            .catch(err => {
+                console.error(err);
+                $('#results-info').text('❌ Erro ao iniciar docking no servidor.');
+            });
         },
-        error: function() {
-            $('#results-info').text('❌ Erro ao enviar arquivos.');
+
+        error: function (xhr, status, error) {
+            console.error('Erro no upload:', status, error);
+            $('#results-info').text('❌ Erro ao enviar arquivos. Verifique sua conexão e tente novamente.');
         }
     });
 });
+
+
 </script>
+{% endraw %}
 </body>
 </html>
+
+
 
 
 
