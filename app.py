@@ -116,7 +116,7 @@ time.sleep(8)
 
 app.config['SECRET_KEY'] = 'your_secret_key'
 app.config['UPLOADED_FILES_DIR'] = 'uploaded_files'
-app.config['GENERATED_FILES_DIR'] = 'generated_files'
+app.config['GENERATED_FILES_DIR'] = os.path.join(os.getcwd(), 'generated_files')
 app.config['uploaded_files_dir'] = 'uploaded_files'
 app.config['generated_files_dir'] = 'generated_files'
 app.config['UPLOAD_FOLDER'] = 'uploads'
@@ -1146,3 +1146,4 @@ if __name__ == "__main__":
     if not os.path.exists(app.config['DOCKING_RESULTS_DIR']):
         os.makedirs(app.config['DOCKING_RESULTS_DIR'])
 app.run(host="0.0.0.0", port=5000)
+
