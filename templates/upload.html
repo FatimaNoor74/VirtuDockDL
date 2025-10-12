@@ -548,27 +548,33 @@ p, ul {
     <!-- Docking Updating Section -->
 
     <div class="form-section">
-    <h2 class="mb-3">Docking Results</h2>
+    <h2 class="mb-3">Processing Status</h2>
         <p id="results-info">No results yet. Please upload files and start docking.</p>
     </div>
 
-    <!-- Docking Results Section -->
+<!-- Docking Results Section -->
 
-    <hr>
-    <div class="form-section" id="docking-results-section" style="display:none;">
-        <div id="docking-results-table"></div>
+<hr>
+<div class="form-section" id="docking-results-section" style="display:none;">
 
-      <div class="d-flex justify-content-center">
-        <a href="#" id="downloadAllComplexesButton" class="btn btn-success mt-3 mb-3" style="display:none;">
+    <div id="docking-results-table"></div>
+
+    <div id="chart-container" style="display:none;">
+        <h3 class="mb-3">Docking Chart</h3>
+        <canvas id="resultsChart"></canvas>
+    </div>
+
+    <div class="d-flex justify-content-center">
+        <a href="#" id="downloadAllComplexesButton"
+           class="btn btn-success mt-3 mb-3"
+           style="display:none;"
+           role="button">
             Download All Complexes and Results in Tabular Form
         </a>
-      </div>
-
-        <div id="chart-container" style="display:none;">
-            <h3 class="mb-3">Docking Chart</h3>
-            <canvas id="resultsChart"></canvas>
-        </div>
     </div>
+
+</div>
+
 </div>
 
 <!-- Instructions Tab Pane -->
@@ -634,60 +640,44 @@ function createChartFromCSVData(chartData, job_id) {
     $('#chart-container').show();
 }
 
-// ===================== EXIBE RESULTADOS EM TABELA =====================
-function displayResultsAsTable(dataArray) {
-    const resultsDiv = document.getElementById('docking-results-table');
-    resultsDiv.innerHTML = ""; // Limpa conteúdo anterior
-
-    const table = document.createElement('table');
-    table.className = 'table table-bordered table-hover';
-
-    const thead = document.createElement('thead');
-    const headerRow = document.createElement('tr');
-    Object.keys(dataArray[0]).forEach(header => {
-        const th = document.createElement('th');
-        th.textContent = header;
-        headerRow.appendChild(th);
-    });
-    thead.appendChild(headerRow);
-    table.appendChild(thead);
-
-    const tbody = document.createElement('tbody');
-    dataArray.forEach(row => {
-        const tr = document.createElement('tr');
-        Object.values(row).forEach(val => {
-            const td = document.createElement('td');
-            td.textContent = val;
-            tr.appendChild(td);
-        });
-        tbody.appendChild(tr);
-    });
-    table.appendChild(tbody);
-
-    resultsDiv.appendChild(table);
-}
-
 // ===================== BUSCA RESULTADOS =====================
 function fetchAndDisplayResults(job_id) {
-    fetch(`/analyze_results/${job_id}`)
-        .then(response => response.text())
+    fetch(`/analyze_results/${job_id}`, { cache: "no-store" })
+        .then(response => {
+            if (response.status === 202) {
+                console.log("Waiting for results...");
+                setTimeout(() => fetchAndDisplayResults(job_id), 5000);
+                return null;
+            }
+            if (!response.ok) {
+                throw new Error('Error fetching results');
+            }
+            return response.text();
+        })
         .then(text => {
+            if (!text) return;
+
             Papa.parse(text, {
                 header: true,
                 skipEmptyLines: true,
                 complete: function(results) {
-                    if (results.data.length > 0) {
+                    if (results.data && results.data.length > 0) {
+                        console.log("Results received!");
+                        // Desliga a mensagem de espera
+                        $('#results-info').text('');
+                        // Mostra tabela
                         displayResultsAsTable(results.data);
+                        // Mostra gráfico
                         fetchAndCreateChart(job_id);
                     } else {
-                        $('#results-info').text('Aguardando resultados...');
+                        console.log("Empty results, retrying...");
                         setTimeout(() => fetchAndDisplayResults(job_id), 5000);
                     }
                 }
             });
         })
-        .catch(() => {
-            $('#results-info').text('Aguardando resultados...');
+        .catch(err => {
+            console.error(err);
             setTimeout(() => fetchAndDisplayResults(job_id), 5000);
         });
 }
@@ -783,6 +773,24 @@ $('#docking-form').on('submit', function(e) {
 {% endraw %}
 </body>
 </html>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
