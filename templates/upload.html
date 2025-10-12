@@ -728,12 +728,14 @@ $('#docking-form').on('submit', function(e) {
             .then(res => res.json())
             .then(data => {
                 $('#results-info').text('⚙️ Docking iniciado! Acompanhe abaixo...');
-                checkJobStatus(job_id); // 🔁 começa a acompanhar o status
             })
             .catch(err => {
                 console.error(err);
                 $('#results-info').text('❌ Erro ao iniciar docking no servidor.');
             });
+
+            // ✅ Inicia checagem imediatamente
+            checkJobStatus(job_id);
         },
 
         error: function (xhr, status, error) {
@@ -743,8 +745,8 @@ $('#docking-form').on('submit', function(e) {
     });
 });
 
-
 </script>
 {% endraw %}
 </body>
 </html>
+
