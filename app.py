@@ -1071,16 +1071,29 @@ def download_results(filename):
     results_directory_path = os.path.join(app.config['DOCKING_RESULTS_DIR'])
     return send_from_directory(directory=results_directory_path, filename=filename, as_attachment=True)
 
+from flask import send_file, make_response, jsonify
+import os
+
 @app.route('/analyze_results/<job_id>', methods=['GET'])
 def analyze_results(job_id):
-    # Directory where the results are stored
-    results_directory = os.path.join(app.config['DOCKING_RESULTS_DIR'], job_id)
-    filepath = os.path.join(results_directory, 'docking_results.csv')
+    # Caminho correto do arquivo CSV
+    filepath = os.path.join("/content/docking_results", job_id, "docking_results.csv")
 
-    if os.path.isfile(filepath) and os.path.getsize(filepath) > 0:
-        return send_file(filepath, as_attachment=True)  # Send the file for download
-    else:
-        return jsonify({'message': 'Results not ready'}), 202
+    print(f"[DEBUG] Checking filepath: {filepath}")
+
+    # Se arquivo ainda NÃO existe → aguardando processamento
+    if not os.path.isfile(filepath):
+        print(f"[DEBUG] File not found yet: {filepath}")
+        return jsonify({'message': 'PENDING'}), 202  # <-- Aqui sim 202!
+
+    # Se arquivo existe → enviar para frontend SEM CACHE
+    print(f"[DEBUG] File found! Sending: {filepath}")
+    response = make_response(send_file(filepath))
+    response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+    return response  # <-- Agora está correto!
+
 
 @app.route('/chart_data/<job_id>')  # URL pattern includes job_id
 def chart_data(job_id):
@@ -1142,20 +1155,6 @@ if __name__ == "__main__":
     if not os.path.exists(app.config['DOCKING_RESULTS_DIR']):
         os.makedirs(app.config['DOCKING_RESULTS_DIR'])
 app.run(host="0.0.0.0", port=5000)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
