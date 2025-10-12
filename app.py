@@ -1076,23 +1076,14 @@ import os
 
 @app.route('/analyze_results/<job_id>', methods=['GET'])
 def analyze_results(job_id):
-    # Caminho correto do arquivo CSV
+    # Directory where the results are stored
+    results_directory = os.path.join(app.config['DOCKING_RESULTS_DIR'], job_id)
     filepath = os.path.join("/content/docking_results", job_id, "docking_results.csv")
 
-    print(f"[DEBUG] Checking filepath: {filepath}")
-
-    # Se arquivo ainda NÃO existe → aguardando processamento
-    if not os.path.isfile(filepath):
-        print(f"[DEBUG] File not found yet: {filepath}")
-        return jsonify({'message': 'PENDING'}), 202  # <-- Aqui sim 202!
-
-    # Se arquivo existe → enviar para frontend SEM CACHE
-    print(f"[DEBUG] File found! Sending: {filepath}")
-    response = make_response(send_file(filepath))
-    response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
-    response.headers["Pragma"] = "no-cache"
-    response.headers["Expires"] = "0"
-    return response  # <-- Agora está correto!
+    if os.path.isfile(filepath) and os.path.getsize(filepath) > 0:
+        return send_file(filepath, as_attachment=True)  # Send the file for download
+    else:
+        return jsonify({'message': 'Results not ready'}), 202
 
 
 @app.route('/chart_data/<job_id>')  # URL pattern includes job_id
@@ -1155,19 +1146,3 @@ if __name__ == "__main__":
     if not os.path.exists(app.config['DOCKING_RESULTS_DIR']):
         os.makedirs(app.config['DOCKING_RESULTS_DIR'])
 app.run(host="0.0.0.0", port=5000)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
