@@ -764,33 +764,24 @@ def allowed_fil(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in {'zip', 'pdb'}
 
 def convert_sdf_to_pdbqt(sdf_path, output_directory):
-    """
-    Converte um único arquivo SDF para PDBQT usando OpenBabel.
-    """
-    if not os.path.exists(sdf_path):
-        raise FileNotFoundError(f"Arquivo não encontrado: {sdf_path}")
-
-    if not sdf_path.endswith(".sdf"):
-        raise ValueError("O arquivo fornecido não é um .sdf")
-
-    # Nome do arquivo .pdbqt de saída
-    base_name = os.path.basename(sdf_path).replace('.sdf', '.pdbqt')
-    output_path = os.path.join(output_directory, base_name)
-
-    obabel_command = [
-        'obabel', sdf_path, '-O', output_path,
-        '--gen3d', '-h'
-    ]
-
-    try:
-        subprocess.run(obabel_command, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        print(f"✅ Convertido com sucesso: {sdf_path} → {output_path}")
-        return output_path
-    except subprocess.CalledProcessError as e:
-        error_msg = e.stderr.decode()
-        print(f"❌ Erro ao converter {sdf_path}: {error_msg}")
-        raise RuntimeError(error_msg)
-
+    # Function to convert SDF files in a specified directory to PDBQT format
+    for root, dirs, files in os.walk(output_directory):
+        for file in files:
+            if file.endswith(".sdf"):  # Check for .sdf files
+                sdf_path = os.path.join(root, file)
+                pdbqt_filename = file.replace('.sdf', '.pdbqt')
+                pdbqt_path = os.path.join(root, pdbqt_filename)
+                # Prepare the obabel command
+                obabel_command = [
+                    'obabel', sdf_path, '-O', pdbqt_path,
+                    '--gen3d', '-h'  # The -h flag adds hydrogens
+                ]
+                # Run the obabel command
+                try:
+                    subprocess.run(obabel_command, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                    print(f"Conversion successful for {file}")
+                except subprocess.CalledProcessError as e:
+                    print(f"An error occurred while converting {file}: {e.stderr.decode()}")
 
 def convert_protein(protein_pdb_path, protein_pdbqt_path):
     # Function to convert a PDB file to PDBQT
@@ -1168,5 +1159,6 @@ if __name__ == "__main__":
     if not os.path.exists(app.config['DOCKING_RESULTS_DIR']):
         os.makedirs(app.config['DOCKING_RESULTS_DIR'])
 app.run(host="0.0.0.0", port=5000)
+
 
 
