@@ -1,6 +1,6 @@
 # VirtuDockDL – Google Colab Usage Guide
 
-[![Abrir no Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/1JWrIuQTpksdFexwtlSpfdo1y5ZQazJIL)
+[![Abrir no Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/1L_ELaTTF-zh8rMTMS8Vu4ecmeUo8cXZ6?usp=sharing)
 
 **VirtuDockDL** is an **AI-powered molecular docking workflow** that integrates **machine learning ligand prioritization, structure refinement, and AutoDock Vina docking** in an automated pipeline. This version has been optimized and adapted for seamless execution in **Google Colab**, requiring <u>no local installation</u>.
 
