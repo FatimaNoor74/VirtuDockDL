@@ -1,4 +1,4 @@
-# VirtuDockDL: A Deep Learning-based Python Pipeline for Virtual Screening
+# VirtuDockDL: A Deep Learning-based Python Pipeline for Virtual Screening *for Google Colab
 
 VirtuDockDL is a comprehensive solution for streamlining the process of drug discovery and molecular analysis. With VirtuDockDL, you can harness the power of deep learning to perform virtual screening, evaluate molecular activities, and predict binding affinities with unprecedented accuracy and speed.
 
