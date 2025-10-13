@@ -11,7 +11,7 @@ For more details, access github: https://github.com/FatimaNoor74/VirtuDockDL
 
 ```
 
-[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/caio123/virtudockdl-colab/blob/main/VirtuDockDL.ipynb)
+[![Abrir no Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/caio123/virtudockdl-colab/blob/main/VirtuDockDL.ipynb)
 
 
 
