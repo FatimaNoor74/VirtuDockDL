@@ -8,7 +8,7 @@ If you use this, cite:
 
 Noor, F., Junaid, M., Almalki, A.H. et al. Deep learning pipeline for accelerating virtual screening in drug discovery. Sci Rep 14, 28321 (2024). https://doi.org/10.1038/s41598-024-79799-w
 
-For more details, access github: https://github.com/FatimaNoor74/VirtuDockDL
+For more details, visit the official GitHub repository: [VirtuDockDL](https://github.com/FatimaNoor74/VirtuDockDL).
 
 
 ```
