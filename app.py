@@ -106,9 +106,9 @@ def start_cloudflared():
         match = re.search(r"https://[-0-9A-Za-z]+\.trycloudflare\.com", logs)
         if match:
             public_url = match.group(0)
-            print(f"\n✅ Túnel Cloudflare ativo: {public_url}\n")
+            print(f"\n✅ Cloudflare tunnel active: {public_url}\n")
         else:
-            print("\n❌ Não consegui capturar a URL do túnel. Execute novamente a célula.\n")
+            print("\n❌ Failed to retrieve the tunnel URL. Re-run this cell.\n")
 
 threading.Thread(target=start_cloudflared, daemon=True).start()
 time.sleep(8)
@@ -1159,6 +1159,7 @@ if __name__ == "__main__":
     if not os.path.exists(app.config['DOCKING_RESULTS_DIR']):
         os.makedirs(app.config['DOCKING_RESULTS_DIR'])
 app.run(host="0.0.0.0", port=5000)
+
 
 
 
