@@ -539,8 +539,7 @@ p, ul {
                 <label for="energy_range">Energy Range:</label>
                 <input type="number" name="energy_range" id="energy_range" class="form-control" placeholder="3" required>
             </div>
-
-            <!-- ✅ Botão deve ficar dentro do <form> -->
+            
             <button type="submit" class="btn btn-primary mt-3">Upload and Start Docking</button>
 
         </form>
@@ -617,7 +616,7 @@ p, ul {
 {% raw %}
 <script>
 
-// ===================== CRIA GRÁFICO =====================
+// ===================== CREATE GRAPHIC  =====================
 function createChartFromCSVData(chartData, job_id) {
     new Chart(document.getElementById('resultsChart').getContext('2d'), {
         type: 'bar',
@@ -629,17 +628,17 @@ function createChartFromCSVData(chartData, job_id) {
         }
     });
 
-    // Mostrar botão de download
+    // Show download button
     $('#downloadAllComplexesButton')
         .attr('href', `/download_complexes/${job_id}`)
         .show();
 
-    // Mostrar seção de resultados e gráfico
+    // Show results and download button
     $('#docking-results-section').show();
     $('#chart-container').show();
 }
 
-// ===================== BUSCA RESULTADOS =====================
+// ===================== FIND RESULTS =====================
 function fetchAndDisplayResults(job_id) {
     // Fetch results using the job_id
     fetch(`/analyze_results/${job_id}`) // This endpoint should return CSV or some data to indicate readiness
@@ -656,7 +655,7 @@ function fetchAndDisplayResults(job_id) {
 }
 
 
-// ===================== BUSCA DADOS DO GRÁFICO =====================
+// ===================== FIND GRAPHIC DATE =====================
 function fetchAndCreateChart(job_id) {
     fetch(`/chart_data/${job_id}`)
         .then(res => res.json())
@@ -666,7 +665,7 @@ function fetchAndCreateChart(job_id) {
         .catch(() => setTimeout(() => fetchAndCreateChart(job_id), 5000));
 }
 
-// ===================== CHECA STATUS DO JOB =====================
+// ===================== CHECK JOB STATUS =====================
 function checkJobStatus(job_id) {
     fetch(`/job_status/${job_id}`)
         .then(res => res.json())
@@ -675,19 +674,19 @@ function checkJobStatus(job_id) {
             if (data.status === "done") {
                 fetchAndDisplayResults(job_id);
             } else if (data.status === "error") {
-                $('#results-info').text(`❌ Erro: ${data.message}`);
+                $('#results-info').text(` Erro: ${data.message}`);
             } else {
                 setTimeout(() => checkJobStatus(job_id), 2000);
             }
         });
 }
 
-// ===================== ENVIA FORMULÁRIO =====================
+// ===================== SEND FORM =====================
 $('#docking-form').on('submit', function(e) {
     e.preventDefault();
 
     var formData = new FormData(this);
-    $('#results-info').text('📤 Enviando arquivos...');
+    $('#results-info').text(' Sending files...');
 
     $.ajax({
         type: 'POST',
@@ -695,14 +694,14 @@ $('#docking-form').on('submit', function(e) {
         data: formData,
         contentType: false,
         processData: false,
-        timeout: 0, // Necessário para uploads grandes
+        timeout: 0, // For big waiting time
         beforeSend: function () {
-            $('#results-info').text('📤 Iniciando conversão dos arquivos...');
+            $('#results-info').text('Starting convertion...');
         },
 
         success: function (response) {
             const job_id = response.job_id;
-            $('#results-info').text(`✅ Conversão concluída! Job ID: ${job_id}. Iniciando docking...`);
+            $('#results-info').text(`Conversion finished! Job ID: ${job_id}. Starting docking...`);
 
             // Parâmetros do docking
             const dockingParams = {
@@ -718,7 +717,7 @@ $('#docking-form').on('submit', function(e) {
                 energy_range: parseInt($('#energy_range').val())
             };
 
-            // Envia os parâmetros de docking
+            // Submit docking parameters
             fetch('/start_docking', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -726,20 +725,20 @@ $('#docking-form').on('submit', function(e) {
             })
             .then(res => res.json())
             .then(data => {
-                $('#results-info').text('⚙️ Docking iniciado! Acompanhe abaixo...');
+                $('#results-info').text('Docking started!');
             })
             .catch(err => {
                 console.error(err);
-                $('#results-info').text('❌ Erro ao iniciar docking no servidor.');
+                $('#results-info').text('Error starting docking on the server.');
             });
 
-            // ✅ Inicia checagem imediatamente
+            // Starts checking immediately
             checkJobStatus(job_id);
         },
 
         error: function (xhr, status, error) {
             console.error('Erro no upload:', status, error);
-            $('#results-info').text('❌ Erro ao enviar arquivos. Verifique sua conexão e tente novamente.');
+            $('#results-info').text('Error uploading files. Check your connection and try again.');
         }
     });
 });
@@ -748,5 +747,6 @@ $('#docking-form').on('submit', function(e) {
 {% endraw %}
 </body>
 </html>
+
 
 
