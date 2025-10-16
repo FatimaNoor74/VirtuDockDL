@@ -2,6 +2,7 @@ import random
 from flask import Flask, render_template, request, flash, redirect, url_for, send_from_directory, after_this_request
 from flask import send_from_directory, jsonify
 import os
+import glob
 from flask import session
 import logging
 import json
@@ -71,10 +72,51 @@ from io import BytesIO
 from flask import Flask, send_from_directory, url_for, current_app, flash, redirect, render_template
 from datetime import datetime
 
+os.makedirs("static", exist_ok=True)
+
+import subprocess
+import threading
+import time
+import re
+import os
+from flask_cors import CORS
+
+public_url = None
+
 app = Flask(__name__)
+CORS(app)
+
+def start_cloudflared():
+    global public_url
+    # Garante que não tem túnel antigo
+    os.system("pkill cloudflared || echo Tunnel limpo!")
+
+    command = [
+        "cloudflared", "tunnel",
+        "--url", "http://localhost:5000",
+        "--logfile", "cloudflared.log",
+        "--metrics", "localhost:45678"
+    ]
+
+    process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+    time.sleep(5)
+    with open("cloudflared.log") as f:
+        logs = f.read()
+        match = re.search(r"https://[-0-9A-Za-z]+\.trycloudflare\.com", logs)
+        if match:
+            public_url = match.group(0)
+            print(f"\n✅ Cloudflare tunnel active: {public_url}\n")
+        else:
+            print("\n❌ Failed to retrieve the tunnel URL. Re-run this cell.\n")
+
+threading.Thread(target=start_cloudflared, daemon=True).start()
+time.sleep(8)
+
+
 app.config['SECRET_KEY'] = 'your_secret_key'
 app.config['UPLOADED_FILES_DIR'] = 'uploaded_files'
-app.config['GENERATED_FILES_DIR'] = 'generated_files'
+app.config['GENERATED_FILES_DIR'] = os.path.join(os.getcwd(), 'generated_files')
 app.config['uploaded_files_dir'] = 'uploaded_files'
 app.config['generated_files_dir'] = 'generated_files'
 app.config['UPLOAD_FOLDER'] = 'uploads'
@@ -199,6 +241,7 @@ def index():
         if 'file' in request.files:
             file = request.files['file']
             if file.filename != '':
+
                 filename = f'Molecules_{timestamp}.csv'
                 uploaded_file_path = os.path.join(app.config['UPLOADED_FILES_DIR'], filename)
                 file.save(uploaded_file_path)
@@ -311,7 +354,7 @@ def index():
                 plt.legend()
 
                 # Save the plot as an image file
-                plot_file_path = os.path.join('static', cluster_plot_filename)  # Assuming your static folder is set up correctly
+                plot_file_path = os.path.join('/content/generated_files', cluster_plot_filename)  # Assuming your static folder is set up correctly
                 plt.savefig(plot_file_path)
                 plt.close()
                 # Perform virtual screening
@@ -320,7 +363,18 @@ def index():
                     flash('File "final_clusters.csv" does not exist. Please generate the clusters first.', 'warning')
                 else:
                     # Read CSV files into pandas dataframes
-                    compounds_df = pd.read_csv(os.path.join(app.config['GENERATED_FILES_DIR'], 'final_compounds.csv'))
+                    # Diretório onde os arquivos estão
+                    generated_dir = '/content/generated_files'
+                    
+                    # Encontra todos os arquivos que começam com 'final_compounds_'
+                    files = glob.glob(os.path.join(generated_dir, 'final_compounds_*.csv'))
+                    
+                    # Pega o mais recente (com base na data de modificação)
+                    latest_file = max(files, key=os.path.getmtime)
+
+                    # Lê o arquivo CSV mais recente
+                    compounds_df = pd.read_csv(latest_file)
+
                     clusters_df = pd.read_csv(file_path)
                     # Convert dataframes to HTML tables
                     compounds_table = compounds_df.to_html(classes='table table-striped table-bordered', index=False)
@@ -332,7 +386,7 @@ def index():
                                            final_clusters_filename=final_clusters_filename,
                                            final_compounds_filename=final_compounds_filename,
                                            compounds_table=compounds_table, clusters_table=clusters_table,
-                                           plot_file_path=plot_file_path[len('static/'):],
+                                           plot_file_path=cluster_plot_filename,
                                            generated_file_path=generated_file_path,
                                            final_clusters_file_path=final_clusters_file_path)  # Added clusters_table
                     # Add return statement for GET request
@@ -346,12 +400,15 @@ def allow_files(filename):
     ALLOWED_EXTENSIONS = {'csv'}
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 # Ensure the static file serving route can handle the new library cluster plot image
+@app.route('/static_uploaded/<filename>')
+def static_uploaded(filename):
+    return send_from_directory('/content/generated_files', filename)
 @app.route('/images/<filename>')
 def uploaded_file(filename):
-    return send_from_directory('path to/PycharmProjects/pythonProject3/generated_files', filename)
-@app.route('/download/sdf_zip')
-def download_sdf_zip():
-    return send_from_directory(app.config['GENERATED_FILES_DIR'], 'compounds_sdf.zip', as_attachment=True)
+    return send_from_directory('/content/generated_files', filename)
+@app.route('/download_sdf_zip/<filename>')
+def download_sdf_zip(filename):
+    return send_from_directory('/content/generated_files', filename, as_attachment=True)
 def get_compound_name_from_pubchem(smiles_string):
     # URL for the PubChem PUG-REST service
     url = f"https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/smiles/{smiles_string}/synonyms/JSON"
@@ -542,7 +599,6 @@ def generate_molecules():
 
     return send_file(file_path, as_attachment=True, download_name=filename)
 
-
 @app.route('/downloads/<filename>')
 def downloads(filename):
     directory = app.config['GENERATED_FILES_DIR']
@@ -647,8 +703,8 @@ def perform_protein_refinement(protein_file_path):
         'stripped_pdb': stripped_pdb_filename,
         'fixed_pdb': fixed_pdb_filename,
         'minimized_pdb': minimized_pdb_filename,
-        'ramachandran_plot': f'static/{ramachandran_plot_filename}',
-        'sasa_per_residue_plot': f'static/{sasa_per_residue_plot_filename}'
+        'ramachandran_graph': ramachandran_plot_filename,
+        'sasa_per_residue_graph': sasa_per_residue_plot_filename
     }
 
 
@@ -675,17 +731,14 @@ def protein_refinement():
                 protein_file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
                 file.save(protein_file_path)
                 #flash('Protein file uploaded successfully.', 'success')
-                perform_protein_refinement(protein_file_path)
-                file2 = 'ramachandran_plot.png'
-                file3 = 'sasa_per_residue_plot.png'
                 result_files = perform_protein_refinement(protein_file_path)
                 # Generate download links and visualization data for the protein refinement results
                 download_links = {
                     'stripped_protein': url_for('uploa', filename=result_files['stripped_pdb']),
                     'fixed_protein': url_for('uploa', filename=result_files['fixed_pdb']),
                     'minimized_protein': url_for('uploa', filename=result_files['minimized_pdb']),
-                    'ramachandran_plot': url_for('static', filename=os.path.basename(result_files['ramachandran_plot'])),
-                    'sasa_per_residue_plot': url_for('static', filename=os.path.basename(result_files['sasa_per_residue_plot']))
+                    'ramachandran_plot': url_for('files_protein', filename=result_files['ramachandran_graph']),
+                    'sasa_per_residue_plot': url_for('files_protein', filename=result_files['sasa_per_residue_graph'])
                 }
 
                 return render_template('upload.html', download_links=download_links, random=int(time.time()), active_tab='protein_refinement')
@@ -694,15 +747,22 @@ def protein_refinement():
         flash('An error occurred during processing.', 'error')
         return redirect(request.url)
     return render_template('upload.html', active_tab='protein_refinement')
+
 @app.route('/files/<filename>')
 def uploa(filename):
     # This sets the directory to your app's root directory
-    directory = current_app.root_path
+    directory = '/content'
     return send_from_directory(directory, filename)
 
+@app.route('/files_protein/<filename>')
+def files_protein(filename):
+    # This sets the directory to your app's root directory
+    directory = '/content/static'
+    return send_from_directory(directory, filename)
 
 def allowed_fil(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in {'zip', 'pdb'}
+
 def convert_sdf_to_pdbqt(sdf_path, output_directory):
     # Function to convert SDF files in a specified directory to PDBQT format
     for root, dirs, files in os.walk(output_directory):
@@ -736,11 +796,27 @@ def convert_protein(protein_pdb_path, protein_pdbqt_path):
         print(f"An error occurred while converting {protein_pdb_path}: {error_message}")
 
 
+def convert_protein(protein_pdb_path, protein_pdbqt_path):
+    # Function to convert a PDB file to PDBQT
+    obabel_command = [
+        'obabel', protein_pdb_path, '-xr', '-O', protein_pdbqt_path  # The -xr flag removes residues not recognized by AutoDock
+    ]
+    try:
+        subprocess.run(obabel_command, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        print(f"Conversion successful for {protein_pdb_path}")
+    except subprocess.CalledProcessError as e:
+        error_message = e.stderr.decode() if e.stderr else 'An error occurred.'
+        print(f"An error occurred while converting {protein_pdb_path}: {error_message}")
+
+
 def clear_workspace(workspace_path):
     if os.path.exists(workspace_path):
         shutil.rmtree(workspace_path)
     os.makedirs(workspace_path)
 
+
+from flask import Response, stream_with_context
+from threading import Thread
 
 @app.route('/upload', methods=['POST'])
 def upload_files():
@@ -778,32 +854,64 @@ def upload_files():
         convert_sdf_to_pdbqt(sdf_path=ligand_zip_path, output_directory=output_directory_path)
         protein_pdbqt_path = protein_file_path.replace('.pdb', '.pdbqt')
         convert_protein(protein_file_path, protein_pdbqt_path)
-        run_docking(protein_pdbqt_path, output_directory_path, job_results_dir)
-
-        return jsonify({'job_id': job_id, 'message': 'Files uploaded, conversion started, and docking initiated!'})
+        
+        return jsonify({'job_id': job_id, 'message': 'Files uploaded, conversion started, and docking initiated!'}), 202
     else:
+        print('Erro durante a conversão')
         return jsonify({'error': 'Invalid file type or missing files.'}), 400
 
+# ======= Início: suporte a fila de docking (cole no app.py) =======
+import queue
+import threading
+import time
+import json
 
-def run_docking(protein_pdbqt, ligand_directory_path, results_directory_path):
-    print("Starting the docking process...")  # Debug print
-    for ligand_file in Path(ligand_directory_path).glob('*.pdbqt'):
-        ligand_pdbqt = str(ligand_file)
-        result_file_path = os.path.join(results_directory_path, ligand_file.stem + '_docked.pdbqt')
-        # Extract docking parameters from the form
-        center_x = request.form.get('center_x', type=float)
-        center_y = request.form.get('center_y', type=float)
-        center_z = request.form.get('center_z', type=float)
-        size_x = request.form.get('size_x', type=float)
-        size_y = request.form.get('size_y', type=float)
-        size_z = request.form.get('size_z', type=float)
-        exhaustiveness = request.form.get('exhaustiveness', type=int)
-        num_modes = request.form.get('num_modes', type=int)
-        energy_range = request.form.get('energy_range', type=int)
+# fila e status global (em memória)
+docking_queue = queue.Queue()
+job_status = {}          # job_id -> {"status": "pending|running|done|error", "message": "..."}
+job_status_lock = threading.Lock()
 
-        # Configuration text for docking
-        # Use these parameters in the docking configuration
-        config_text = f"""receptor = {protein_pdbqt}
+def safe_mkdir(path):
+    os.makedirs(path, exist_ok=True)
+
+def run_vina_for_job(job_id, data):
+    """Executa o processo de docking para um job_id (rodado pela worker thread)."""
+    try:
+        # Parâmetros vindos do data
+        center_x = data.get('center_x')
+        center_y = data.get('center_y')
+        center_z = data.get('center_z')
+        size_x = data.get('size_x')
+        size_y = data.get('size_y')
+        size_z = data.get('size_z')
+        exhaustiveness = data.get('exhaustiveness')
+        num_modes = data.get('num_modes')
+        energy_range = data.get('energy_range')
+
+        job_workspace = os.path.join(app.config['UPLOAD_FOLDER'], job_id)
+        job_results_dir = os.path.join(app.config['DOCKING_RESULTS_DIR'], job_id)
+        output_directory_path = os.path.join(job_workspace, 'refined_ligands')
+
+        # Garante diretórios
+        safe_mkdir(job_workspace)
+        safe_mkdir(job_results_dir)
+
+        # Acha o protein .pdb (pode lançar se não houver)
+        protein_pdbs = list(Path(job_workspace).glob('*.pdb'))
+        if not protein_pdbs:
+            raise RuntimeError("Arquivo PDB do receptor não encontrado no workspace do job.")
+        protein_file_path = protein_pdbs[0]
+        protein_pdbqt_path = protein_file_path.with_suffix('.pdbqt')
+
+        docking_data = []
+
+        # Iterate ligands (cada ligand -> cria config, roda vina, salva log)
+        for ligand_file in Path(output_directory_path).glob('*.pdbqt'):
+            ligand_pdbqt = str(ligand_file)
+            result_file_path = os.path.join(job_results_dir, ligand_file.stem + '_docked.pdbqt')
+            config_file_path = os.path.join(job_results_dir, ligand_file.stem + '_config.txt')
+
+            config_text = f"""receptor = {protein_pdbqt_path}
 ligand = {ligand_pdbqt}
 
 center_x = {center_x}
@@ -817,58 +925,142 @@ out = {result_file_path}
 exhaustiveness = {exhaustiveness}
 num_modes = {num_modes}
 energy_range = {energy_range}
-    """
-        # Write configuration to a file
-        config_file_path = os.path.join(results_directory_path, ligand_file.stem + '_config.txt')
-        with open(config_file_path, 'w') as config_file:
-            config_file.write(config_text)
+"""
+            # escreve config
+            with open(config_file_path, 'w') as cfg:
+                cfg.write(config_text)
 
-        # Run Vina with output capture
-        vina_command = ['vina', '--config', config_file_path]
-        try:
-            result = subprocess.run(vina_command, capture_output=True, text=True)
-            if result.returncode != 0:  # Check if the command was not successful
-                print(f"Error in docking: {result.stderr}")  # Log any errors
-            else:
-                print(f"Docking completed for {ligand_file.stem}. Output:\n{result.stdout}")  # Log the success output
-        except Exception as e:
-            print(f"An exception occurred: {e}")  # Log any exceptions
-        finally:
-            # Clean up the config file after docking
-            os.remove(config_file_path)
-        # Initialize an empty list to collect docking data
-        docking_data = []
-        for file_name in Path(results_directory_path).glob('*_docked.pdbqt'):
-            with open(file_name, 'r') as file:
-                lines = file.readlines()
-                # Extract data for all poses
-                for line in lines:
+            # log file por ligand
+            vina_log_path = os.path.join(job_results_dir, f"{ligand_file.stem}_vina.log")
+
+            vina_command = ['vina', '--config', config_file_path]
+            try:
+                # aqui rodamos o Vina e salvamos stdout/stderr em log
+                proc = subprocess.run(vina_command, capture_output=True, text=True, timeout=3600)  # timeout por segurança
+                with open(vina_log_path, 'w') as lf:
+                    lf.write("=== STDOUT ===\n")
+                    lf.write(proc.stdout or "")
+                    lf.write("\n=== STDERR ===\n")
+                    lf.write(proc.stderr or "")
+                if proc.returncode != 0:
+                    print(f"[{job_id}] Vina returned non-zero for {ligand_file.stem}: {proc.stderr}")
+                else:
+                    print(f"[{job_id}] Vina done for {ligand_file.stem}")
+            except subprocess.TimeoutExpired as te:
+                with open(vina_log_path, 'w') as lf:
+                    lf.write(f"TIMEOUT after {te.timeout} seconds\n")
+                print(f"[{job_id}] Timeout running Vina for {ligand_file.stem}")
+            except Exception as e:
+                with open(vina_log_path, 'w') as lf:
+                    lf.write(f"EXCEPTION: {str(e)}\n")
+                print(f"[{job_id}] Exception running Vina for {ligand_file.stem}: {e}")
+            finally:
+                # Remove config (seguro)
+                try:
+                    os.remove(config_file_path)
+                except Exception:
+                    pass
+
+        # Depois de rodar todos os ligands, coletar REMARK lines
+        for file_name in Path(job_results_dir).glob('*_docked.pdbqt'):
+            with open(file_name, 'r') as f:
+                for line in f:
                     if line.startswith("REMARK VINA RESULT:"):
-                        # Parse out the binding affinity and RMSD
                         parts = line.split()
-                        binding_affinity = float(parts[3])  # The fourth item on this line is the affinity
-                        rmsd_lb = float(parts[4])  # RMSD lower bound
-                        rmsd_ub = float(parts[5])  # RMSD upper bound
-                        # Store in the list with the 'file_name' key
-                        docking_data.append({
-                            'file_name': os.path.basename(file_name),  # Use basename to get the file name only
-                            'binding_affinity': binding_affinity,
-                            'rmsd_lb': rmsd_lb,
-                            'rmsd_ub': rmsd_ub
-                        })
+                        # Protege contra parsing inválido
+                        try:
+                            docking_data.append({
+                                'file_name': os.path.basename(file_name),
+                                'binding_affinity': float(parts[3]),
+                                'rmsd_lb': float(parts[4]),
+                                'rmsd_ub': float(parts[5])
+                            })
+                        except Exception:
+                            continue
 
-        # Check if docking data was collected
         if docking_data:
-            # Convert list to DataFrame
             df = pd.DataFrame(docking_data)
-            df_second_poses = df.groupby('file_name').nth(1)  # This selects the second pose for each ligand
+            # mantemos a lógica anterior (pegar segunda pose, etc)
+            df_second_poses = df.groupby('file_name').nth(1).reset_index()
             df_second_poses['final_rmsd'] = df_second_poses['rmsd_ub'] - df_second_poses['rmsd_lb']
             df_best_poses = df_second_poses
-            print(df_best_poses)
-            csv_file_path = os.path.join(results_directory_path, 'docking_results.csv')
+            csv_file_path = os.path.join(job_results_dir, 'docking_results.csv')
             df_best_poses.to_csv(csv_file_path, index=False)
         else:
-            print("No docking data to process.")
+            # salva um CSV vazio para indicar que não houve resultados
+            csv_file_path = os.path.join(job_results_dir, 'docking_results.csv')
+            pd.DataFrame([]).to_csv(csv_file_path, index=False)
+
+        # finaliza job com sucesso
+        with job_status_lock:
+            job_status[job_id]['status'] = 'done'
+            job_status[job_id]['message'] = 'Docking completed successfully.'
+        print(f"[{job_id}] completed.")
+
+    except Exception as e:
+        print(f"[{job_id}] Exception in run_vina_for_job: {e}")
+        with job_status_lock:
+            # marca erro e armazena mensagem
+            job_status[job_id]['status'] = 'error'
+            job_status[job_id]['message'] = str(e)
+
+def docking_worker():
+    """Worker que processa a fila em série (um job por vez)."""
+    while True:
+        job_id, data = docking_queue.get()
+        with job_status_lock:
+            job_status[job_id]['status'] = 'running'
+            job_status[job_id]['message'] = 'Running docking...'
+        try:
+            run_vina_for_job(job_id, data)
+        finally:
+            docking_queue.task_done()
+        # breve sono para evitar loop apertado
+        time.sleep(0.2)
+
+# inicializa worker em background (daemon)
+worker_thread = threading.Thread(target=docking_worker, daemon=True)
+worker_thread.start()
+
+# Endpoint que enfileira o job (substitui o start_docking anterior)
+@app.route('/start_docking', methods=['POST'])
+def start_docking():
+    try:
+        data = request.get_json(force=True)
+        if not data:
+            return jsonify({"error": "Nenhum dado recebido"}), 400
+        job_id = data.get('job_id')
+        if not job_id:
+            return jsonify({"error": "job_id não informado"}), 400
+
+        # Cria pastas do job (se ainda não existirem)
+        job_workspace = os.path.join(app.config['UPLOAD_FOLDER'], job_id)
+        job_results_dir = os.path.join(app.config['DOCKING_RESULTS_DIR'], job_id)
+        safe_mkdir(job_workspace)
+        safe_mkdir(job_results_dir)
+
+        # inicializa status do job
+        with job_status_lock:
+            job_status[job_id] = {'status': 'pending', 'message': 'Job enfileirado.'}
+
+        # coloca na fila (data pode conter params de docking)
+        docking_queue.put((job_id, data))
+
+        return jsonify({'message': 'Job enfileirado', 'job_id': job_id}), 202
+
+    except Exception as e:
+        print(f"Erro no backend (start_docking): {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+# Endpoint para consultar status de job
+@app.route('/job_status/<job_id>', methods=['GET'])
+def job_status_endpoint(job_id):
+    with job_status_lock:
+        info = job_status.get(job_id)
+        if not info:
+            return jsonify({'status': 'unknown', 'message': 'job_id não encontrado'}), 404
+        return jsonify(info), 200
+# ======= Fim: suporte a fila de docking =======
 
 def validate_docking_output(docked_file_path):
     if os.path.exists(docked_file_path) and os.path.getsize(docked_file_path) > 0:
@@ -880,30 +1072,26 @@ def validate_docking_output(docked_file_path):
                 print(line.strip())  # Process line or check if it's as expected
     else:
         print(f"Docked file {docked_file_path} not found or is empty.")
-@app.route('/docking', methods=['GET'])
-def docking():
-    protein_file_path = request.args.get('protein_file_path', type=str)
-    protein_pdbqt_path = os.path.join(app.config['UPLOADED_FILES_DIR'], protein_file_path)
-    ligand_directory_path = os.path.join(app.config['GENERATED_FILES_DIR'], 'refined_ligands')
-    results_directory_path = os.path.join(app.config['DOCKING_RESULTS_DIR'])
-
-    run_docking(protein_pdbqt_path, ligand_directory_path, results_directory_path)
-    return jsonify({'message': 'Docking completed!'})
 
 @app.route('/list_docking_results')
 def list_docking_results():
     results_files = Path(app.config['DOCKING_RESULTS_DIR']).glob('*_docked.pdbqt')
     results_list = [str(result) for result in results_files if result.is_file() and result.stat().st_size > 0]
     return jsonify(results_list)
+
 @app.route('/results/<filename>')
 def download_results(filename):
     results_directory_path = os.path.join(app.config['DOCKING_RESULTS_DIR'])
     return send_from_directory(directory=results_directory_path, filename=filename, as_attachment=True)
+
+from flask import send_file, make_response, jsonify
+import os
+
 @app.route('/analyze_results/<job_id>', methods=['GET'])
 def analyze_results(job_id):
     # Directory where the results are stored
     results_directory = os.path.join(app.config['DOCKING_RESULTS_DIR'], job_id)
-    filepath = os.path.join(results_directory, 'docking_results.csv')
+    filepath = os.path.join("/content/docking_results", job_id, "docking_results.csv")
 
     if os.path.isfile(filepath) and os.path.getsize(filepath) > 0:
         return send_file(filepath, as_attachment=True)  # Send the file for download
@@ -970,4 +1158,8 @@ if __name__ == "__main__":
         os.makedirs(app.config['UPLOAD_FOLDER'])
     if not os.path.exists(app.config['DOCKING_RESULTS_DIR']):
         os.makedirs(app.config['DOCKING_RESULTS_DIR'])
-    app.run(debug=True)
+app.run(host="0.0.0.0", port=5000)
+
+
+
+
